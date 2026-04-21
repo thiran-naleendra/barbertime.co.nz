@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Models\Barber;
 use App\Models\Booking;
 use App\Models\Service;
 use Illuminate\Http\Request;
@@ -20,16 +21,19 @@ class BookingSlotsController extends Controller
             ]);
 
             $service = Service::findOrFail($data['service_id']);
-            $barber  = trim($data['barber']);
+            $barber = Barber::query()
+                ->where('name', trim($data['barber']))
+                ->where('is_active', true)
+                ->firstOrFail();
 
             // NZ day range
             $dayStart = Carbon::createFromFormat('Y-m-d', $data['date'], 'Pacific/Auckland')->startOfDay();
             $dayEnd   = $dayStart->copy()->endOfDay();
+            $durationMinutes = max(30, (int) ($service->duration_minutes ?: 30));
 
             // Booked slots PER BARBER
             $booked = Booking::query()
-                ->where('service_id', $service->id)
-                ->where('barber_name', $barber)
+                ->where('barber_name', $barber->name)
                 ->whereBetween('booking_start_at', [
                     $dayStart->copy()->timezone('UTC'),
                     $dayEnd->copy()->timezone('UTC'),
@@ -42,14 +46,17 @@ class BookingSlotsController extends Controller
                 ->values()
                 ->all();
 
-            // Working hours
-            $open  = $dayStart->copy()->setTime(9, 0);
-            $close = $dayStart->copy()->setTime(18, 0);
+            [$openHour, $openMinute] = array_map('intval', explode(':', substr((string) $barber->work_start_time, 0, 5)));
+            [$closeHour, $closeMinute] = array_map('intval', explode(':', substr((string) $barber->work_end_time, 0, 5)));
+
+            $open  = $dayStart->copy()->setTime($openHour, $openMinute);
+            $close = $dayStart->copy()->setTime($closeHour, $closeMinute);
 
             $slots = [];
             $slot  = $open->copy();
+            $latestStart = $close->copy()->subMinutes($durationMinutes);
 
-            while ($slot->lt($close)) {
+            while ($slot->lte($latestStart)) {
                 $time = $slot->format('H:i');
 
                 $slots[] = [
@@ -62,6 +69,11 @@ class BookingSlotsController extends Controller
 
             return response()->json([
                 'slots' => $slots,
+                'working_hours' => [
+                    'start' => $open->format('H:i'),
+                    'end' => $close->format('H:i'),
+                    'label' => $barber->working_hours_label,
+                ],
             ]);
         } catch (\Throwable $e) {
             // ✅ ALWAYS return JSON (prevents frontend crash)

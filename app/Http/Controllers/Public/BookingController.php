@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 
 use App\Mail\CustomerBookingSubmittedMail;
 use App\Mail\OwnerNewBookingMail;
@@ -39,14 +40,26 @@ class BookingController extends Controller
     {
         $data = $request->validate([
             'service_id'     => ['required', 'exists:services,id'],
-            'barber_name'    => ['required', 'string', 'max:50'],
+            'barber_name'    => [
+                'required',
+                'string',
+                'max:50',
+                Rule::exists('barbers', 'name')->where(fn ($query) => $query->where('is_active', true)),
+            ],
             'date'           => ['required', 'date'],
             'time'           => ['required', 'date_format:H:i'],
             'customer_name'  => ['required', 'string', 'max:255'],
             'customer_email' => ['required', 'email', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:30'],
             'notes'          => ['nullable', 'string', 'max:2000'],
+            'agree_policies' => ['accepted'],
         ]);
+
+        $service = Service::findOrFail($data['service_id']);
+        $barber = Barber::query()
+            ->where('name', trim($data['barber_name']))
+            ->where('is_active', true)
+            ->firstOrFail();
 
         // Combine date + time (NZ)
         $nzDateTime = Carbon::createFromFormat(
@@ -58,6 +71,32 @@ class BookingController extends Controller
         if ($nzDateTime->isPast()) {
             return back()
                 ->withErrors(['date' => 'Booking date/time must be in the future.'])
+                ->withInput();
+        }
+
+        $workStart = Carbon::createFromFormat(
+            'Y-m-d H:i',
+            $data['date'].' '.substr((string) $barber->work_start_time, 0, 5),
+            'Pacific/Auckland'
+        );
+        $workEnd = Carbon::createFromFormat(
+            'Y-m-d H:i',
+            $data['date'].' '.substr((string) $barber->work_end_time, 0, 5),
+            'Pacific/Auckland'
+        );
+        $durationMinutes = max(30, (int) ($service->duration_minutes ?: 30));
+        $bookingEnd = $nzDateTime->copy()->addMinutes($durationMinutes);
+
+        if ($nzDateTime->lt($workStart) || $bookingEnd->gt($workEnd)) {
+            return back()
+                ->withErrors([
+                    'time' => sprintf(
+                        '%s is available between %s and %s only.',
+                        $barber->name,
+                        substr((string) $barber->work_start_time, 0, 5),
+                        substr((string) $barber->work_end_time, 0, 5),
+                    ),
+                ])
                 ->withInput();
         }
 

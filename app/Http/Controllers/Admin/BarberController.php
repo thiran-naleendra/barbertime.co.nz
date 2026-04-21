@@ -27,12 +27,16 @@ class BarberController extends Controller
             'image' => ['nullable','image','mimes:jpg,jpeg,png,webp','max:2048'],
             'is_active' => ['nullable','boolean'],
             'sort_order' => ['nullable','integer','min:0'],
+            'work_start_time' => ['required', 'date_format:H:i'],
+            'work_end_time' => ['required', 'date_format:H:i', 'after:work_start_time'],
         ]);
 
         $barber = new Barber();
         $barber->name = $data['name'];
         $barber->is_active = (bool)($data['is_active'] ?? true);
         $barber->sort_order = (int)($data['sort_order'] ?? 0);
+        $barber->work_start_time = $data['work_start_time'];
+        $barber->work_end_time = $data['work_end_time'];
 
         if ($request->hasFile('image')) {
             $barber->image_path = $request->file('image')->store('barbers', 'public');
@@ -55,11 +59,15 @@ class BarberController extends Controller
             'image' => ['nullable','image','mimes:jpg,jpeg,png,webp','max:2048'],
             'is_active' => ['nullable','boolean'],
             'sort_order' => ['nullable','integer','min:0'],
+            'work_start_time' => ['required', 'date_format:H:i'],
+            'work_end_time' => ['required', 'date_format:H:i', 'after:work_start_time'],
         ]);
 
         $barber->name = $data['name'];
         $barber->is_active = (bool)($data['is_active'] ?? $barber->is_active);
         $barber->sort_order = (int)($data['sort_order'] ?? $barber->sort_order);
+        $barber->work_start_time = $data['work_start_time'];
+        $barber->work_end_time = $data['work_end_time'];
 
         if ($request->hasFile('image')) {
             if ($barber->image_path && Storage::disk('public')->exists($barber->image_path)) {

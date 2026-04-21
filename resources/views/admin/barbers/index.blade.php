@@ -99,6 +99,7 @@
         <tr>
           <th style="width:90px;">Image</th>
           <th>Name</th>
+          <th style="width:150px;">Working Hours</th>
           <th style="width:120px;">Active</th>
           <th style="width:90px;">Sort</th>
           <th style="width:190px;">Actions</th>
@@ -118,6 +119,8 @@
             </td>
 
             <td class="fw-semibold">{{ $barber->name }}</td>
+
+            <td class="fw-semibold">{{ $barber->working_hours_label }}</td>
 
             <td>
               @if($barber->is_active)
@@ -144,7 +147,7 @@
           </tr>
         @empty
           <tr>
-            <td colspan="5" class="text-center py-4 text-muted">No barbers found.</td>
+            <td colspan="6" class="text-center py-4 text-muted">No barbers found.</td>
           </tr>
         @endforelse
       </tbody>
@@ -168,6 +171,7 @@
         <div class="flex-grow-1">
           <p class="barber-mobile-name">{{ $barber->name }}</p>
           <div class="barber-mobile-meta">
+            Hours: <strong>{{ $barber->working_hours_label }}</strong><br>
             Status:
             @if($barber->is_active)
               <span class="badge badge-soft badge-soft-success">Active</span>

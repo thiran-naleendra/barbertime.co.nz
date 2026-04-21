@@ -459,6 +459,7 @@
                         <label class="form-label">Preferred Time</label>
 
                         <input type="hidden" name="time" id="selectedTime" value="{{ old('time') }}">
+                        <div class="small muted-on-dark mb-2 d-none" id="workingHoursHint"></div>
 
                         <div class="slot-wrap" id="slotWrap">
                             <div class="small muted-on-dark">
@@ -602,6 +603,7 @@
         const slotError = document.getElementById('slotError');
         const slotHint = document.getElementById('slotHint');
         const slotSelectedLabel = document.getElementById('slotSelectedLabel');
+        const workingHoursHint = document.getElementById('workingHoursHint');
         const form = document.getElementById('bookingForm');
 
         // ✅ Hidden <select> (keeps same backend field)
@@ -633,33 +635,23 @@
             slotWrap.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('is-selected'));
         }
 
-        function renderSlots(slots) {
+        function renderSlots(slots, workingHours) {
             slotWrap.innerHTML = '';
             clearError();
 
-            if (!slots || !slots.length) {
-                slotWrap.innerHTML =
-                    '<div class="small muted-on-dark">No available slots for this day.</div>';
-                return;
+            if (workingHours && workingHours.label) {
+                workingHoursHint.textContent = `Working hours: ${workingHours.label}`;
+                workingHoursHint.classList.remove('d-none');
+            } else {
+                workingHoursHint.textContent = '';
+                workingHoursHint.classList.add('d-none');
             }
 
-            /* =========================
-               ✅ EDIT AREA (SHOP HOURS)
-               ========================= */
-
-            const OPEN_HOUR = 9; // 9 AM
-            const CLOSE_HOUR_WEEKDAY = 19; // 7 PM (Mon-Sat)
-            const CLOSE_HOUR_SUNDAY = 16; // 4 PM (Sunday)
-
-            const MORNING_END = 12; // before 12 = Morning
-
-            /* ========================= */
-
-            // detect selected day
-            const selectedDate = new Date(dateInput.value);
-            const isSunday = selectedDate.getDay() === 0;
-
-            const CLOSE_HOUR = isSunday ? CLOSE_HOUR_SUNDAY : CLOSE_HOUR_WEEKDAY;
+            if (!slots || !slots.length) {
+                slotWrap.innerHTML =
+                    '<div class="small muted-on-dark">No available slots within this barber\'s working hours.</div>';
+                return;
+            }
 
             const morning = [];
             const afternoon = [];
@@ -667,12 +659,7 @@
             slots.forEach(s => {
                 const hh = parseInt(s.time.split(':')[0], 10);
 
-                // ✅ filter by shop hours
-                if (hh < OPEN_HOUR || hh >= CLOSE_HOUR) {
-                    return;
-                }
-
-                if (hh < MORNING_END) {
+                if (hh < 12) {
                     morning.push(s);
                 } else {
                     afternoon.push(s);
@@ -723,11 +710,8 @@
                 return section;
             }
 
-            const morningSection = buildGroup('Morning (9AM – 12PM)', morning);
-            const afternoonSection = buildGroup(
-                isSunday ? 'Afternoon (12PM – 4PM)' : 'Afternoon (12PM – 7PM)',
-                afternoon
-            );
+            const morningSection = buildGroup('Morning (before 12PM)', morning);
+            const afternoonSection = buildGroup('Afternoon (from 12PM)', afternoon);
 
             if (morningSection) slotWrap.appendChild(morningSection);
             if (afternoonSection) slotWrap.appendChild(afternoonSection);
@@ -742,6 +726,8 @@
             resetSelectedTime();
 
             if (!serviceId || !date || !barber) {
+                workingHoursHint.textContent = '';
+                workingHoursHint.classList.add('d-none');
                 slotWrap.innerHTML =
                     '<div class="small muted-on-dark">Select service, date, and barber to load available time slots.</div>';
                 return;
@@ -762,8 +748,10 @@
                 if (!res.ok) throw new Error();
 
                 const json = await res.json();
-                renderSlots(json.slots || []);
+                renderSlots(json.slots || [], json.working_hours || null);
             } catch {
+                workingHoursHint.textContent = '';
+                workingHoursHint.classList.add('d-none');
                 slotWrap.innerHTML = '';
                 setError('Could not load time slots. Please try again.');
             }
